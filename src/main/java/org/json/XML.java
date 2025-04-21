@@ -501,7 +501,9 @@ public class XML {
     //c) self closing tag process
     //d) handle content between <...> and </...>
     //e) nested element, then recursion
-    private static boolean parseAndReplace(XMLTokener x, JSONObject context, String name, XMLParserConfiguration config, int currentNestingDepth, JSONPointer targetPath, JSONObject replacement, List<String> currentPath)
+    static boolean replacementPathFound = false; //if the replacement path has been found
+    static boolean hasBeenReplaced = false; //making sure the replacement occurs only once
+    private static boolean parse2(XMLTokener x, JSONObject context, String name, XMLParserConfiguration config, String tagNameToChange, JSONObject tagDataToChange, boolean isReplaceMode)
             throws JSONException {
         char c;
         int i;
@@ -510,6 +512,15 @@ public class XML {
         String tagName;
         Object token;
         XMLXsiTypeConverter<?> xmlXsiTypeConverter;
+
+        // Check if the specified path for replacement has been found and if the replacement has not already occurred.
+        if (replacementPathFound) {
+            if (!hasBeenReplaced) {
+                context.remove(tagNameToChange); // Remove the old data.
+                context.put(tagNameToChange, tagDataToChange.get(tagNameToChange)); // Insert the replacement data.
+                hasBeenReplaced = true; // Mark as replaced to prevent duplicate actions.
+            }
+        }
 
         // Test for and skip past these forms:
         // <!-- ... -->
@@ -577,6 +588,9 @@ public class XML {
             if (x.nextToken() != GT) {
                 throw x.syntaxError("Misshaped close tag");
             }
+            if (isReplaceMode && tagNameToChange.equals(token)) {
+                replacementPathFound = true; //if the replacement path has been found
+            }
             return true;
 
         } else if (token instanceof Character) {
@@ -587,30 +601,6 @@ public class XML {
         } else {
             // changed here to keep the path so we can replace
             tagName = (String) token;
-            boolean result = false; //initalize result here to replace return false
-            currentPath.add(tagName); // Track current path into this tag
-            try {
-                // Check if current path matches targetPath
-                String currentPathStr = "/" + String.join("/", currentPath);
-                String normalizedTargetPath = targetPath.toString().replaceAll("/$", "");
-
-                System.out.println("Debug - check Current Path: " + currentPathStr);
-                System.out.println("Debug - check Normalized Target Path: " + normalizedTargetPath);
-
-                if (currentPathStr.equals(normalizedTargetPath)) {
-                    System.out.println("Debug - paths match");
-                    if (replacement.has(tagName)) {
-                        // If replacement has the target tag name, use its value otherwise use entire replacement object
-                        context.put(tagName, replacement.get(tagName));
-                    } else {
-                        context.put(tagName, replacement);
-                    }
-                    skipTag(x); // skip past this one
-                    currentPath.remove(currentPath.size() - 1); // Backtrack
-                    return false;
-                }
-                //end of changes for path tracking for replacement
-
                 token = null;
                 jsonObject = new JSONObject();
                 boolean nilAttributeFound = false;
@@ -682,8 +672,7 @@ public class XML {
                                 context.accumulate(tagName, "");
                             }
                         }
-                        result = false;
-                        break; // do not need to process more for this self-closing tag section, changed return false to result and break
+                        return false;
 
                     } else if (token == GT) {
                         // handles content between <...> and </...>
@@ -693,8 +682,8 @@ public class XML {
                                 if (tagName != null) {
                                     throw x.syntaxError("Unclosed tag " + tagName);
                                 }
-                                result = false;
-                                break;
+                                return false;
+
                             } else if (token instanceof String) {
                                 string = (String) token;
                                 if (string.length() > 0) {
@@ -721,11 +710,8 @@ public class XML {
 
                             } else if (token == LT) {
                                 // if its' a nested element then recursion
-                                if (currentNestingDepth == config.getMaxNestingDepth()) {
-                                    throw x.syntaxError("Maximum nesting depth of " + config.getMaxNestingDepth() + " reached");
-                                }
 
-                                if (parseAndReplace(x, jsonObject, tagName, config, currentNestingDepth + 1, targetPath, replacement, currentPath)) {
+                                if (parse2(x, jsonObject, tagName, config, tagNameToChange, tagDataToChange, isReplaceMode)) {
                                     if (config.getForceList().contains(tagName)) {
                                         // Force the value to be an array
                                         if (jsonObject.length() == 0) {
@@ -750,55 +736,70 @@ public class XML {
                                         }
                                     }
 
-                                    result = false; //no need to process this section anymore
-                                    break;
+                                    return false;
                                 }
                             }
                         }
-                    }
-                    if (result == false) {
-                        break; //exit the outer for loop since we've already found the result
+
+
                     } else {
                         throw x.syntaxError("Misshaped tag");
                     }
                 }
-            } finally {
-                // backtrack path on exit
-                currentPath.remove(currentPath.size() - 1);
             }
-            return result;
         }
+    //first overloaded method for milestone 2 here
+    public static JSONObject toJSONObject(Reader reader, JSONPointer path) {
+        JSONObject jo = new JSONObject();
+        XMLTokener x = new XMLTokener(reader);
+        String[] pathList = path.toString().split("/");
+        boolean pathFind = false;
+        String stopTag = pathList[pathList.length - 1];
 
-    }
-    // skip helper method
-    private static void skipTag(XMLTokener x) throws JSONException {
-        int depth = 1;
-        while (depth > 0 && x.more()) {
-            Object token = x.nextToken();
-            if (token instanceof Character && ((Character) token) == '<') {
-                Object next = x.nextToken();
-                if (next instanceof Character && ((Character) next) == '/') {
-                    depth--;
-                } else {
-                    depth++;
+
+        // Parse
+        while (x.more()) {
+            x.skipPast("<"); // go past the "<" to find the element beginning
+            if (!pathFind) {
+                pathFind = parse2(x, jo, null, XMLParserConfiguration.ORIGINAL, stopTag, null, false);
+                if (pathFind) {
+                    break;
                 }
             }
         }
+
+        // Query the JSONObject that is the target
+        Object result = jo.query(path);
+
+        if (result == null) {
+            throw new JSONException("Path not found in the XML document: " + path.toString());
+        }
+
+        return (JSONObject) result;
     }
 
+
     // added second overloaded method here
-    public static JSONObject toJSONObjectReplacement(Reader reader, JSONPointer path, JSONObject replacement) throws JSONException {
+    public static JSONObject toJSONObject(Reader reader, JSONPointer path, JSONObject replacement) throws JSONException {
         JSONObject jo = new JSONObject();
         XMLTokener x = new XMLTokener(reader, XMLParserConfiguration.ORIGINAL);
-        List<String> currentPath = new ArrayList<>();
+        String[] pathList = path.toString().split("/"); //split JSONPointer path
+        String replaceTag = pathList[pathList.length - 1];
+
+        // Parse through the XML, looking for the tag that matches the replaceKey to perform the replacement.
         while (x.more()) {
-            x.skipPast("<");
+            x.skipPast("<"); // Move to the start of the next XML element.
             if (x.more()) {
-                // Call new parser
-                parseAndReplace(x, jo, null, XMLParserConfiguration.ORIGINAL, 0, path, replacement, currentPath);
+                // Call a method to parse the XML, providing it with information about what needs to be replaced.
+                parse2(x, jo, null, XMLParserConfiguration.ORIGINAL, replaceTag, replacement, true);
             }
         }
-        return jo;
+
+        // reset global values for future use
+        replacementPathFound = false;
+        hasBeenReplaced = false;
+
+        return jo; // Return the modified JSONObject.
     }
     /**
      * This method removes any JSON entry which has the key set by XMLParserConfiguration.cDataTagName
