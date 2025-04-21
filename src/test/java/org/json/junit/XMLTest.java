@@ -4,6 +4,7 @@ package org.json.junit;
 Public Domain.
 */
 
+import static org.json.XML.sanitizeXML;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
@@ -1425,6 +1426,98 @@ public class XMLTest {
         JSONObject jsonObject3 = XML.toJSONObject(str2, new XMLParserConfiguration().withKeepStrings(true));
         assertEquals(jsonObject3.getJSONObject("color").getString("value"), "008E97");
     }
+
+    @Test
+    public void testPointerJustJSONCheck() {
+        String xmlString = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"+
+                "<contact>\n"+
+                "  <nick>Crista </nick>\n"+
+                "  <name>Crista Lopes</name>\n" +
+                "</contact>";
+
+        try {
+            JSONObject result = XML.toJSONObject(new StringReader(xmlString));
+            System.out.println("Parsed JSON: " + result.toString());
+            assertTrue(result.has("contact"));
+            assertTrue(result.get("contact") instanceof JSONObject);
+        } catch (JSONException e) {
+            fail("Exception thrown: " + e.getMessage());
+        }
+    }
+    @Test
+    public void testPointerWithReplacement() {
+        String xmlString = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                + "<contact>\n"
+                + "  <nick>Crista</nick>\n"
+                + "  <name>Crista Lopes</name>\n"
+                + "  <address>\n"
+                + "    <street>Ave of Nowhere</street>\n"
+                + "    <zipcode>92614</zipcode>\n"
+                + "  </address>\n"
+                + "</contact>";
+
+        // Sanitize the XML string
+        String sanitizedXML = sanitizeXML(xmlString);
+        System.out.println("Debug - Sanitized XML: " + sanitizedXML);
+
+        try {
+            // Replacement JSON object
+            JSONObject replacement = new JSONObject();
+            replacement.put("street", "Avenue of the Arts");
+
+            // Perform the replacement
+            JSONObject result = XML.toJSONObjectReplacement(
+                    new StringReader(sanitizedXML),
+                    new JSONPointer("/contact/address/street"),
+                    replacement
+            );
+
+            // Check the replacement
+            assertTrue(result.has("contact"));
+            assertTrue(result.get("contact") instanceof JSONObject);
+            assertEquals("Avenue of the Arts", result.getJSONObject("contact")
+                    .getJSONObject("address")
+                    .get("street"));
+
+            // Ensure other elements are not affected
+            assertEquals("Crista", result.getJSONObject("contact").get("nick"));
+            assertEquals("92614", result.getJSONObject("contact").getJSONObject("address").get("zipcode"));
+        } catch (JSONException e) {
+            fail("Exception thrown: " + e.getMessage());
+        }
+    }
+//        String xmlString = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>"
+//                + "<contact>"
+//                + "<nick>Crista</nick>"
+//                + "<name>Crista Lopes</name>"
+//                + "<address>"
+//                + "<street>Ave of Nowhere</street>"
+//                + "<zipcode>92614</zipcode>"
+//                + "</address>"
+//                + "</contact>";
+//        xmlString = xmlString.replaceAll("[\\x00-\\x1F\\x7F]", "");
+//        System.out.println("XML String being parsed: " + xmlString);
+//
+//        try {
+//            JSONObject replacement = XML.toJSONObject("<street>Ave of the Arts</street>\n");
+//
+//            JSONObject result = XML.toJSONObjectReplacement(
+//                    new StringReader(xmlString),
+//                    new JSONPointer("/contact/address/street/"),
+//                    replacement
+//            );
+//
+//            JSONObject address = result.getJSONObject("contact").getJSONObject("address");
+//            System.out.println(result.toString(2));
+//            assertEquals("Avenue of the Arts", address.getJSONObject("street").get("street"));
+//            assertEquals("92614", address.get("zipcode"));
+//            assertEquals("Crista ", result.getJSONObject("contact").get("nick"));
+//            assertEquals("Crista Lopes", result.getJSONObject("contact").get("name"));
+//
+//        } catch (JSONException e) {
+//            fail("Exception thrown: " + e.getMessage());
+//        }
+//    }
 
 }
 
