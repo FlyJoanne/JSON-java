@@ -1436,10 +1436,10 @@ public class XMLTest {
     }
 
     /**
-     * Test the toJSONObject method with JSONPointer for extracting a specific part.
+     * The below three test cases aimed for the toJSONObject method with JSONPointer for extracting a specific part.
      */
     @Test
-    public void testToJSONObjectWithPointer() {
+    public void toJSONObjectPointerExtractTest() {
         String xmlStr =
                 "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
                         "<contact>\n" +
@@ -1451,22 +1451,12 @@ public class XMLTest {
                         "  </address>\n" +
                         "</contact>";
 
-        // Test extracting a single value
-        JSONPointer pointer = new JSONPointer("/contact/address/street");
         xmlStr = sanitizeXML(xmlStr);
+
+        JSONPointer pointer = new JSONPointer("/contact/address");
         JSONObject result = XML.toJSONObject(new StringReader(xmlStr), pointer);
 
-        System.out.println("Single value test result: " + result.toString(2));
-
-        assertNotNull("Result should not be null", result);
-        assertTrue("Result should contain street", result.has("street"));
-        assertEquals("Ave of Nowhere", result.getString("street"));
-
-        // Test extracting an object
-        pointer = new JSONPointer("/contact/address");
-        result = XML.toJSONObject(new StringReader(xmlStr), pointer);
-
-        System.out.println("Object test result: " + result.toString(2));
+        System.out.println("Address object test result: " + result.toString(2));
 
         assertNotNull("Result should not be null", result);
         assertTrue("Result should contain street", result.has("street"));
@@ -1478,7 +1468,7 @@ public class XMLTest {
         pointer = new JSONPointer("/contact");
         result = XML.toJSONObject(new StringReader(xmlStr), pointer);
 
-        System.out.println("Root object test result: " + result.toString(2));
+        System.out.println("Contact root object test result: " + result.toString(2));
 
         assertNotNull("Result should not be null", result);
         assertTrue("Result should contain name", result.has("name"));
@@ -1488,7 +1478,57 @@ public class XMLTest {
     }
 
     @Test
-    public void testPointerWithReplacement() {
+    public void toJSONObjectPointerDeepExtractTest() {
+        String xmlStr =
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
+                        "<university>\n" +
+                        "  <college>\n" +
+                        "    <department>\n" +
+                        "      <name>Computer Science</name>\n" +
+                        "      <building>Engineering Hall</building>\n" +
+                        "    </department>\n" +
+                        "  </college>\n" +
+                        "</university>";
+
+        xmlStr = sanitizeXML(xmlStr);
+
+        JSONPointer pointer = new JSONPointer("/university/college/department");
+        JSONObject result = XML.toJSONObject(new StringReader(xmlStr), pointer);
+
+        System.out.println("Department object test result: " + result.toString(2));
+
+        assertNotNull("Result should not be null", result);
+        assertTrue("Result should contain name", result.has("name"));
+        assertTrue("Result should contain building", result.has("building"));
+        assertEquals("Computer Science", result.getString("name"));
+        assertEquals("Engineering Hall", result.getString("building"));
+    }
+
+    @Test
+    public void toJSONObjectPointerExtractErrorTest() {
+        String xmlStr =
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
+                        "<contact>\n" +
+                        "  <name>Crista Lopes</name>\n" +
+                        "</contact>";
+
+        xmlStr = sanitizeXML(xmlStr);
+
+        JSONPointer pointer = new JSONPointer("/contact/address");
+
+        try {
+            XML.toJSONObject(new StringReader(xmlStr), pointer);
+            fail("Expected JSONException to be thrown");
+        } catch (JSONException e) {
+            System.out.println("Expected exception caught: " + e.getMessage());
+        }
+    }
+
+    /**
+     * The below three test cases aimed for the toJSONObject method with JSONPointer for replacing a specific part.
+     */
+    @Test
+    public void toJSONObjectPointerReplaceTest() {
         String xmlString = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
                 + "<contact>\n"
                 + "  <nick>Crista</nick>\n"
@@ -1532,6 +1572,71 @@ public class XMLTest {
             assertEquals(92614, result.getJSONObject("contact").getJSONObject("address").get("zipcode"));
         } catch (JSONException e) {
             fail("Exception thrown: " + e.getMessage());
+        }
+    }
+
+    @Test
+    public void toJSONObjectPointerDeepReplaceTest() {
+        String xmlString = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+                + "<library>\n"
+                + "  <section>\n"
+                + "    <book>\n"
+                + "      <title>Old Title</title>\n"
+                + "      <author>Someone</author>\n"
+                + "    </book>\n"
+                + "  </section>\n"
+                + "</library>";
+
+        String sanitizedXML = sanitizeXML(xmlString);
+
+        try {
+            JSONObject replacement = new JSONObject();
+            replacement.put("title", "New Amazing Title");
+
+            JSONObject result = XML.toJSONObject(
+                    new StringReader(sanitizedXML),
+                    new JSONPointer("/library/section/book/title"),
+                    replacement
+            );
+
+            assertEquals("New Amazing Title", result.getJSONObject("library")
+                    .getJSONObject("section")
+                    .getJSONObject("book")
+                    .get("title"));
+
+            assertEquals("Someone", result.getJSONObject("library")
+                    .getJSONObject("section")
+                    .getJSONObject("book")
+                    .get("author"));
+        } catch (JSONException e) {
+            fail("Exception thrown: " + e.getMessage());
+        }
+    }
+
+    @Test
+    public void toJSONObjectPointerReplaceErrorTest() {
+        String xmlStr =
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
+                        "<library>\n" +
+                        "  <section>\n" +
+                        "    <book>\n" +
+                        "      <title>Old Title</title>\n" +
+                        "    </book>\n" +
+                        "  </section>\n" +
+                        "</library>";
+
+        xmlStr = sanitizeXML(xmlStr);
+
+        JSONPointer pointer = new JSONPointer("/library/section/magazine");
+
+        JSONObject replacement = new JSONObject();
+        replacement.put("magazine", "New Magazine");
+
+        try {
+            XML.toJSONObject(new StringReader(xmlStr), pointer, replacement);
+            fail("Expected JSONException to be thrown");
+        } catch (JSONException e) {
+            System.out.println("Expected exception caught: " + e.getMessage());
         }
     }
 }

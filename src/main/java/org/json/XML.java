@@ -753,8 +753,16 @@ public class XML {
         JSONObject jo = new JSONObject();
         XMLTokener x = new XMLTokener(reader);
         String[] pathList = path.toString().split("/");
+
+        // deal with path ending with number
+        String stopTag;
+        if (pathList.length > 0 && pathList[pathList.length - 1].matches("\\d+")) {
+            stopTag = pathList[pathList.length - 2];
+        } else {
+            stopTag = pathList[pathList.length - 1];
+        }
+
         boolean pathFind = false;
-        String stopTag = pathList[pathList.length - 1];
 
 
         // Parse
@@ -775,16 +783,27 @@ public class XML {
             throw new JSONException("Path not found in the XML document: " + path.toString());
         }
 
-        return (JSONObject) result;
+        if (result instanceof JSONObject) {
+            return (JSONObject) result;
+        } else {
+            throw new JSONException("Path " + path.toString() + " does not resolve to a JSONObject.");
+        }
     }
 
 
     // added second overloaded method here
     public static JSONObject toJSONObject(Reader reader, JSONPointer path, JSONObject replacement) throws JSONException {
         JSONObject jo = new JSONObject();
-        XMLTokener x = new XMLTokener(reader, XMLParserConfiguration.ORIGINAL);
+        XMLTokener x = new XMLTokener(reader);
         String[] pathList = path.toString().split("/"); //split JSONPointer path
-        String replaceTag = pathList[pathList.length - 1];
+
+        String replaceTag;
+        // deal with special situations like the end of the path is number (eg. /books/0/title）
+        if (pathList.length > 0 && pathList[pathList.length - 1].matches("\\d+")) {
+            replaceTag = pathList[pathList.length - 2];
+        } else {
+            replaceTag = pathList[pathList.length - 1];
+        }
 
         // Parse through the XML, looking for the tag that matches the replaceKey to perform the replacement.
         while (x.more()) {
@@ -793,6 +812,11 @@ public class XML {
                 // Call a method to parse the XML, providing it with information about what needs to be replaced.
                 parse2(x, jo, null, XMLParserConfiguration.ORIGINAL, replaceTag, replacement, true);
             }
+        }
+
+        // before resetting global values, check if replacement actually happened
+        if (!replacementPathFound) {
+            throw new JSONException("Replacement path not found: " + path.toString());
         }
 
         // reset global values for future use
