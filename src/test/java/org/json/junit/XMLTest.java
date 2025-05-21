@@ -18,6 +18,7 @@ import java.io.StringReader;
 import java.nio.charset.Charset;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Function;
 
 import org.json.*;
 import org.junit.Rule;
@@ -1638,6 +1639,101 @@ public class XMLTest {
         } catch (JSONException e) {
             System.out.println("Expected exception caught: " + e.getMessage());
         }
+    }
+
+    // Below are the test cases for Milestone 3
+    @Test
+    public void testKeyTransformation() {
+        String xml = "<book><title>XML Guide</title><author>John Doe</author></book>";
+        Function<String, String> prefixer = key -> "swe262_" + key;
+        JSONObject json = XML.toJSONObject(new StringReader(xml), prefixer);
+
+        System.out.println(json.toString(2));
+        assertTrue(json.has("swe262_book"));
+        JSONObject book = json.getJSONObject("swe262_book");
+        assertTrue(book.has("swe262_title"));
+        assertEquals("XML Guide", book.getString("swe262_title"));
+        assertTrue(book.has("swe262_author"));
+        assertEquals("John Doe", book.getString("swe262_author"));
+    }
+
+    @Test
+    public void testKeyReversalTransformation() {
+        String xml = "<abc><def>123</def><ghi>456</ghi></abc>";
+        Function<String, String> reverser = key -> new StringBuilder(key).reverse().toString();
+        JSONObject json = XML.toJSONObject(new StringReader(xml), reverser);
+
+        System.out.println(json.toString(2));
+        assertTrue(json.has("cba"));
+        JSONObject nested = json.getJSONObject("cba");
+        assertTrue(nested.has("fed"));
+        assertEquals(123, nested.getInt("fed"));
+        assertTrue(nested.has("ihg"));
+        assertEquals(456, nested.getInt("ihg"));
+    }
+
+    @Test
+    public void testUpperCaseKeyTransformation() {
+        String xml = "<person><name>John</name><age>30</age></person>";
+        Function<String, String> upperCase = String::toUpperCase;
+        JSONObject json = XML.toJSONObject(new StringReader(xml), upperCase);
+
+        System.out.println(json.toString(2));
+        assertTrue(json.has("PERSON"));
+        JSONObject person = json.getJSONObject("PERSON");
+        assertTrue(person.has("NAME"));
+        assertEquals("John", person.getString("NAME"));
+        assertTrue(person.has("AGE"));
+        assertEquals(30, person.getInt("AGE"));
+    }
+
+    @Test
+    public void testLowerCaseKeyTransformation() {
+        String xml = "<BOOK><TITLE>XML Fundamentals</TITLE><AUTHOR>Jane Smith</AUTHOR></BOOK>";
+        Function<String, String> toLowerCase = String::toLowerCase;
+        JSONObject json = XML.toJSONObject(new StringReader(xml), toLowerCase);
+
+        System.out.println(json.toString(2));
+        assertTrue(json.has("book"));
+        JSONObject book = json.getJSONObject("book");
+        assertTrue(book.has("title"));
+        assertEquals("XML Fundamentals", book.getString("title"));
+        assertTrue(book.has("author"));
+        assertEquals("Jane Smith", book.getString("author"));
+    }
+
+    @Test
+    public void testEmptyXmlInputReturnsEmptyJson() {
+        String xml = "";
+        Function<String, String> identity = Function.identity();
+        JSONObject result = XML.toJSONObject(new StringReader(xml), identity);
+
+        assertNotNull(result);
+        assertEquals(0, result.length());
+    }
+
+
+    @Test
+    public void testEmptyRootTag() {
+        String xml = "<root></root>";
+        Function<String, String> identity = Function.identity();
+        JSONObject json = XML.toJSONObject(new StringReader(xml), identity);
+
+        System.out.println(json.toString(2));
+        assertTrue(json.has("root"));
+        assertEquals("", json.get("root"));
+    }
+
+    @Test
+    public void testWhitespaceOnlyTagContent() {
+        String xml = "<container><tag>   \n\t</tag></container>";
+        Function<String, String> identity = Function.identity();
+        JSONObject json = XML.toJSONObject(new StringReader(xml), identity);
+
+        System.out.println(json.toString(2));
+        JSONObject container = json.getJSONObject("container");
+        assertTrue(container.has("tag"));
+        assertEquals("", container.get("tag"));
     }
 }
 

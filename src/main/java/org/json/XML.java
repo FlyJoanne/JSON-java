@@ -11,6 +11,7 @@ import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.function.Function;
 
 /**
  * This provides static methods to convert an XML text into a JSONObject, and to
@@ -748,6 +749,144 @@ public class XML {
                 }
             }
         }
+    // Recursive parser that transforms only tag names (NOT attributes)
+    private static boolean parse3(XMLTokener x, JSONObject context, String name,
+                                  XMLParserConfiguration config, Function<String, String> keyTransformer) throws JSONException {
+        Object token = x.nextToken();
+
+        if (token == BANG || token == QUEST) {
+            x.skipPast(token == BANG ? ">" : "?>");
+            return false;
+        }
+
+        if (token == SLASH) {
+            token = x.nextToken();  // Get tag name
+            if (!token.equals(name)) {
+                throw x.syntaxError("Mismatched close tag: " + token);
+            }
+            if (x.nextToken() != GT) {
+                throw x.syntaxError("Misshaped close tag");
+            }
+            return true;
+        }
+
+        if (token instanceof Character) {
+            throw x.syntaxError("Misshaped tag");
+        }
+
+        // Start of an open tag like <book>
+        String tagName = (String) token;
+        String transformedTag = keyTransformer.apply(tagName);
+        JSONObject jsonObject = new JSONObject();
+        token = null;
+        boolean nilAttributeFound = false;
+        XMLXsiTypeConverter<?> xmlXsiTypeConverter = null;
+
+        // Handle attributes inside the tag
+        while (true) {
+            if (token == null) {
+                token = x.nextToken();
+            }
+
+            if (token instanceof String) {
+                String attrName = (String) token;
+                token = x.nextToken();
+
+                Object attrValue = "";
+
+                if (token == EQ) {
+                    token = x.nextToken();
+                    if (!(token instanceof String)) {
+                        throw x.syntaxError("Missing value for attribute");
+                    }
+
+                    if (config.isConvertNilAttributeToNull() && NULL_ATTR.equals(attrName)
+                            && Boolean.parseBoolean((String) token)) {
+                        nilAttributeFound = true;
+                    } else if (TYPE_ATTR.equals(attrName) && config.getXsiTypeMap() != null) {
+                        xmlXsiTypeConverter = config.getXsiTypeMap().get(token);
+                    } else {
+                        attrValue = stringToValue((String) token);
+                    }
+
+                    token = null;
+                }
+
+                // Note: attribute keys are NOT transformed
+                if (!nilAttributeFound) {
+                    jsonObject.accumulate(attrName, attrValue);
+                }
+
+            } else if (token == SLASH) {
+                if (x.nextToken() != GT) {
+                    throw x.syntaxError("Misshaped tag");
+                }
+
+                if (nilAttributeFound) {
+                    context.accumulate(transformedTag, JSONObject.NULL);
+                } else if (jsonObject.length() > 0) {
+                    context.accumulate(transformedTag, jsonObject);
+                } else {
+                    context.accumulate(transformedTag, "");
+                }
+                return false;
+
+            } else if (token == GT) {
+                while (true) {
+                    token = x.nextContent();
+
+                    if (token == null) {
+                        if (tagName != null) {
+                            throw x.syntaxError("Unclosed tag " + tagName);
+                        }
+                        return false;
+
+                    } else if (token instanceof String) {
+                        String text = (String) token;
+                        if (!text.isEmpty()) {
+                            Object val = (xmlXsiTypeConverter != null)
+                                    ? stringToValue(text, xmlXsiTypeConverter)
+                                    : stringToValue(text);
+                            jsonObject.accumulate(config.getcDataTagName(), val);
+                        }
+
+                    } else if (token == LT) {
+                        // Do recursive call to nested element
+                        if (parse3(x, jsonObject, tagName, config, keyTransformer)) {
+                            if (jsonObject.length() == 0) {
+                                context.accumulate(transformedTag, "");
+                            } else if (jsonObject.length() == 1
+                                    && jsonObject.opt(config.getcDataTagName()) != null) {
+                                context.accumulate(transformedTag, jsonObject.opt(config.getcDataTagName()));
+                            } else {
+                                context.accumulate(transformedTag, jsonObject);
+                            }
+                            return false;
+                        }
+                    }
+                }
+
+            } else {
+                throw x.syntaxError("Malformed token inside tag");
+            }
+        }
+    }
+
+    // Milestone 3: convert XML to JSON with key transformation function
+    public static JSONObject toJSONObject(Reader reader, Function<String, String> keyTransformer) throws JSONException {
+        JSONObject result = new JSONObject();
+        XMLTokener x = new XMLTokener(reader);
+
+        while (x.more()) {
+            x.skipPast("<");
+            if (x.more()) {
+                parse3(x, result, null, XMLParserConfiguration.ORIGINAL, keyTransformer);
+            }
+        }
+
+        return result;
+    }
+
     //first overloaded method for milestone 2 here
     public static JSONObject toJSONObject(Reader reader, JSONPointer path) {
         JSONObject jo = new JSONObject();
