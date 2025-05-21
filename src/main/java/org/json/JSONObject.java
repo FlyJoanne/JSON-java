@@ -3062,20 +3062,20 @@ public class JSONObject {
     }
 
     private void buildNodesFromJson(Object current, String path, List<JSONNode> out) {
-        if (current instanceof JSONObject jo) {
+        if (current instanceof JSONObject jo) { //starting point
             for (String key : jo.keySet()) {
                 Object val = jo.get(key);
                 String newPath = path.isEmpty() ? key : path + "." + key;
                 buildNodesFromJson(val, newPath, out);
             }
-        } else if (current instanceof JSONArray ja) {
+        } else if (current instanceof JSONArray ja) { //if there's multiple elements in an array like 3 books in books
             for (int i = 0; i < ja.length(); i++) {
                 Object val = ja.get(i);
                 String newPath = path + "[" + i + "]";
                 buildNodesFromJson(val, newPath, out);
             }
         } else {
-            out.add(new JSONNode(path, current));
+            out.add(new JSONNode(path, current)); //deepest layer
         }
     }
 }

@@ -4013,6 +4013,7 @@ public class JSONObjectTest {
         return nestedMap;
     }
 
+    //milestone 4
     @Test
     public void testToStreamExtractTitles() {
         String xml = """
@@ -4048,5 +4049,106 @@ public class JSONObjectTest {
         obj.toStream().forEach(node ->
                 System.out.println(node.getPath() + " → " + node.getValue())
         );
+    }
+
+    @Test
+    public void testEmptyXML() {
+        String xml = "<root></root>";
+        JSONObject obj = XML.toJSONObject(xml);
+
+        List<String> paths = obj.toStream()
+                .map(node -> node.getPath())
+                .collect(Collectors.toList());
+
+        // Should include only root node
+        assertEquals(List.of("root"), paths);
+    }
+
+    @Test
+    public void testSingleElementXML() {
+        String xml = "<name>John</name>";
+        JSONObject obj = XML.toJSONObject(xml);
+
+        List<String> values = obj.toStream()
+                .map(node -> node.getValue().toString())
+                .collect(Collectors.toList());
+
+        assertTrue(values.contains("John"));
+    }
+
+    @Test
+    public void testNestedEmptyElements() {
+        String xml = "<root><empty></empty></root>";
+        JSONObject obj = XML.toJSONObject(xml);
+
+        List<String> paths = obj.toStream()
+                .map(node -> node.getPath())
+                .collect(Collectors.toList());
+
+        ;
+        assertTrue(paths.contains("root.empty"));
+        assertEquals(1, paths.size()); // /root/empty
+    }
+
+    @Test
+    public void testNestedElements() {
+        String xml = "<root><AA></AA><BB></BB></root>";
+        JSONObject obj = XML.toJSONObject(xml);
+
+        List<String> paths = obj.toStream()
+                .map(node -> node.getPath())
+                .collect(Collectors.toList());
+
+        ;
+        assertTrue(paths.contains("root.AA"));
+        assertTrue(paths.contains("root.BB"));
+        assertEquals(2, paths.size()); // /root/AA /root/BB
+    }
+
+    @Test
+    public void testNestedElementsWords() {
+        String xml = "<root><AA>cat</AA><BB>dog</BB></root>";
+        JSONObject obj = XML.toJSONObject(xml);
+
+        List<String> paths = obj.toStream()
+                .map(node -> node.getPath())
+                .collect(Collectors.toList());
+
+        ;
+        assertTrue(paths.contains("root.AA"));
+        assertTrue(paths.contains("root.BB"));
+        assertEquals(2, paths.size()); // /root/AA /root/BB
+    }
+
+    @Test
+    public void testAttributesOnlyXML() {
+        String xml = "<user id='123' type='admin'></user>";
+        JSONObject obj = XML.toJSONObject(xml);
+
+        List<String> paths = obj.toStream()
+                .map(node -> node.getPath())
+                .collect(Collectors.toList());
+
+        assertTrue(paths.contains("user.id"));
+        assertTrue(paths.contains("user.type"));
+    }
+
+    @Test
+    public void testMultipleNestedArrays() {
+        String xml = """
+            <library>
+                <book><title>One</title></book>
+                <book><title>Two</title></book>
+                <book><title>Three</title></book>
+            </library>
+        """;
+        JSONObject obj = XML.toJSONObject(xml);
+
+        List<String> titles = obj.toStream()
+                .filter(node -> node.getPath().endsWith("title"))
+                .map(node -> node.getValue().toString())
+                .collect(Collectors.toList());
+
+        assertEquals(List.of("One", "Two", "Three"), titles);
     }
 }
