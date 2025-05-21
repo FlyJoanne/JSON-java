@@ -17,6 +17,7 @@ import java.math.BigInteger;
 import java.util.*;
 import java.util.Map.Entry;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
 
 /**
  * A JSONObject is an unordered collection of name/value pairs. Its external
@@ -3029,5 +3030,52 @@ public class JSONObject {
         }
         if (negativeFirstChar) {return "-0";}
         return "0";
+    }
+
+    public class JSONNode {
+        private final String path;
+        private final Object value;
+
+        public JSONNode(String path, Object value) {
+            this.path = path;
+            this.value = value;
+        }
+
+        public String getPath() {
+            return path;
+        }
+
+        public Object getValue() {
+            return value;
+        }
+
+        @Override
+        public String toString() {
+            return path + " = " + value;
+        }
+    }
+
+    public Stream<JSONNode> toStream() {
+        List<JSONNode> result = new ArrayList<>();
+        buildNodesFromJson(this, "", result);
+        return result.stream();
+    }
+
+    private void buildNodesFromJson(Object current, String path, List<JSONNode> out) {
+        if (current instanceof JSONObject jo) { //starting point
+            for (String key : jo.keySet()) {
+                Object val = jo.get(key);
+                String newPath = path.isEmpty() ? key : path + "." + key;
+                buildNodesFromJson(val, newPath, out);
+            }
+        } else if (current instanceof JSONArray ja) { //if there's multiple elements in an array like 3 books in books
+            for (int i = 0; i < ja.length(); i++) {
+                Object val = ja.get(i);
+                String newPath = path + "[" + i + "]";
+                buildNodesFromJson(val, newPath, out);
+            }
+        } else {
+            out.add(new JSONNode(path, current)); //deepest layer
+        }
     }
 }
