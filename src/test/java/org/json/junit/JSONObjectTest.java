@@ -25,6 +25,7 @@ import java.math.BigInteger;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 import org.json.CDL;
 import org.json.JSONArray;
@@ -4012,4 +4013,40 @@ public class JSONObjectTest {
         return nestedMap;
     }
 
+    @Test
+    public void testToStreamExtractTitles() {
+        String xml = """
+        <Books>
+            <book><title>AAA</title><author>ASmith</author></book>
+            <book><title>BBB</title><author>BSmith</author></book>
+        </Books>
+        """;
+        JSONObject obj = XML.toJSONObject(xml);
+
+        List<String> titles = obj.toStream()
+                .filter(node -> node.getPath().endsWith("title"))
+                .map(node -> node.getValue().toString())
+                .collect(Collectors.toList());
+
+        assertEquals(List.of("AAA", "BBB"), titles);
+    }
+
+    @Test
+    public void testToStreamPrintAllNodes() {
+        String xml = """
+        <User>
+            <name>Jo</name>
+            <age>24</age>
+            <skills>
+                <skill>Java</skill>
+                <skill>Python</skill>
+            </skills>
+        </User>
+        """;
+        JSONObject obj = XML.toJSONObject(xml);
+
+        obj.toStream().forEach(node ->
+                System.out.println(node.getPath() + " → " + node.getValue())
+        );
+    }
 }
