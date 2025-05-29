@@ -18,12 +18,17 @@ import java.io.StringReader;
 import java.nio.charset.Charset;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
 import org.json.*;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
+
+import java.util.List;
+import java.util.ArrayList;
 
 
 /**
@@ -1734,6 +1739,122 @@ public class XMLTest {
         JSONObject container = json.getJSONObject("container");
         assertTrue(container.has("tag"));
         assertEquals("", container.get("tag"));
+    }
+
+    // test cases for milestone 5:
+    @Test
+    public void testWriteJsonToString() throws Exception {
+        String xml = "<root><name>Alice</name></root>";
+        Reader reader = new StringReader(xml);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        StringBuilder result = new StringBuilder();
+
+        XML.toJSONObject(
+                reader,
+                (JSONObject jo) -> {
+                    result.append(jo.toString());
+                    latch.countDown();
+                },
+                (Exception e) -> fail("Unexpected exception")
+        );
+
+        latch.await(1, TimeUnit.SECONDS);
+        assertTrue(result.toString().contains("Alice"));
+    }
+
+    @Test
+    public void testExtractSubObject() throws Exception {
+        String xml = "<root><user><id>123</id><name>Jo</name></user></root>";
+        Reader reader = new StringReader(xml);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        List<String> extracted = new ArrayList<>();
+
+        XML.toJSONObject(
+                reader,
+                (JSONObject jo) -> {
+                    JSONObject user = (JSONObject) jo.query("/root/user");
+                    extracted.add(user.getString("name"));
+                    latch.countDown();
+                },
+                (Exception e) -> fail("Unexpected exception")
+        );
+
+        latch.await(1, TimeUnit.SECONDS);
+        assertEquals(List.of("Jo"), extracted);
+    }
+
+    @Test
+    public void testCheckKeyExists() throws Exception {
+        String xml = "<doc><type>report</type></doc>";
+        Reader reader = new StringReader(xml);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        List<String> result = new ArrayList<>();
+
+        XML.toJSONObject(
+                reader,
+                (JSONObject jo) -> {
+                    if (jo.getJSONObject("doc").has("type")) {
+                        result.add("Found type key");
+                    }
+                    latch.countDown();
+                },
+                (Exception e) -> fail("Unexpected exception")
+        );
+
+        latch.await(1, TimeUnit.SECONDS);
+        assertEquals(List.of("Found type key"), result);
+    }
+
+    @Test
+    public void testAddPrefixToKeys() throws Exception {
+        String xml = "<student><name>May</name><age>20</age></student>";
+        Reader reader = new StringReader(xml);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        JSONObject[] transformed = new JSONObject[1];
+
+        XML.toJSONObject(
+                reader,
+                (JSONObject jo) -> {
+                    JSONObject input = jo.getJSONObject("student");
+                    JSONObject result = new JSONObject();
+                    for (String key : input.keySet()) {
+                        result.put("swe262_" + key, input.get(key));
+                    }
+                    transformed[0] = result;
+                    latch.countDown();
+                },
+                (Exception e) -> fail("Unexpected exception")
+        );
+
+        latch.await(1, TimeUnit.SECONDS);
+        assertTrue(transformed[0].has("swe262_name"));
+        assertTrue(transformed[0].getString("swe262_name").equals("May"));
+    }
+
+    @Test
+    public void testReplaceSubObject() throws Exception {
+        String xml = "<config><version>1.0</version></config>";
+        Reader reader = new StringReader(xml);
+
+        CountDownLatch latch = new CountDownLatch(1);
+        JSONObject[] modified = new JSONObject[1];
+
+        XML.toJSONObject(
+                reader,
+                (JSONObject jo) -> {
+                    jo.getJSONObject("config").put("version", "2.0");
+                    modified[0] = jo;
+                    latch.countDown();
+                },
+                (Exception e) -> fail("Unexpected exception")
+        );
+
+        latch.await(1, TimeUnit.SECONDS);
+        assertEquals("2.0", modified[0].getJSONObject("config").get("version"));
     }
 }
 

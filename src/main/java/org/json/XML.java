@@ -11,6 +11,7 @@ import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 /**
@@ -1617,5 +1618,19 @@ public class XML {
             sb.append(' ');
         }
         return sb.toString();
+    }
+
+    //Milestone 5：
+    public static void toJSONObject(Reader reader,
+                                    Consumer<JSONObject> onSuccess,
+                                    Consumer<Exception> onError) {
+        new Thread(() -> {
+            try {
+                JSONObject result = XML.toJSONObject(reader);
+                onSuccess.accept(result);
+            } catch (Exception e) {
+                onError.accept(e);
+            }
+        }).start();
     }
 }
