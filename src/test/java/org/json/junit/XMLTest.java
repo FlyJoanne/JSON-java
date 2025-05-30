@@ -1856,5 +1856,42 @@ public class XMLTest {
         latch.await(1, TimeUnit.SECONDS);
         assertEquals("2.0", modified[0].getJSONObject("config").get("version"));
     }
+
+    @Test
+    public void testEmptyXmlInput() throws Exception {
+        Reader reader = new StringReader("");
+        CountDownLatch latch = new CountDownLatch(1);
+        JSONObject[] result = new JSONObject[1];
+
+        XML.toJSONObject(
+                reader,
+                (JSONObject jo) -> {
+                    result[0] = jo;
+                    latch.countDown();
+                },
+                (Exception e) -> fail("Unexpected exception")
+        );
+
+        latch.await(1, TimeUnit.SECONDS);
+        assertNotNull(result[0]);
+        assertTrue(result[0].isEmpty()); // Expecting {}
+    }
+
+    @Test
+    public void testBadXml() throws Exception {
+        Reader reader = new StringReader("<unclosed><tag>");
+
+        CountDownLatch latch = new CountDownLatch(1);
+
+        XML.toJSONObject(
+                reader,
+                (JSONObject jo) -> fail("Should not succeed on bad XML"),
+                (Exception e) -> latch.countDown()
+        );
+
+        latch.await(1, TimeUnit.SECONDS);
+        assertEquals(0, latch.getCount());
+    }
+
 }
 
